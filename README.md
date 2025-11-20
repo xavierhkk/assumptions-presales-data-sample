@@ -22,10 +22,10 @@ step 2: qualifying rows into leads - manufacturing relevance and manufacturing r
 
 a. phase2_manufacturing_relevance.py
 
-manufacturing relevance: must have relevant NAICS codes or at least 2 manufacturing keywords/tags, filter by industry codes, business descriptions
+manufacturing relevance: must have relevant NAICS codes or at least 2 manufacturing related keywords/tags, filter by industry codes, business descriptions
 
 b. phase3_manufacturing_reliability.py
 
 supplier capability assessment - evaluate company size (employee_count_type and employee_count), stability (year_founded), financials (revenue_type and revenue)
 
-geographical and logistics analysis — consider location factors for supply chain efficiency (num_locations)
+geographical and logistics analysis — consider location factor for supply chain efficiency (num_locations)
