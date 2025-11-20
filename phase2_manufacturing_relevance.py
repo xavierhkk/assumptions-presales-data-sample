@@ -280,7 +280,7 @@ def filter_manufacturing_companies(input_file, output_file):
 
 if __name__ == "__main__":
     # Configuration
-    INPUT_FILE = "phase1_selected_rows.csv"  # Output from Phase 1
+    INPUT_FILE = "phase1_pragmatic_selected_rows.csv"  # Output from Phase 1
     OUTPUT_FILE = "phase2_manufacturing_companies.csv"
 
     # Verify input file exists
