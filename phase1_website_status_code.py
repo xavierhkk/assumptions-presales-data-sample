@@ -295,7 +295,7 @@ def process_supplier_data_pragmatic(input_file, output_file, rejected_file=None)
 
 if __name__ == "__main__":
     # Configuration
-    INPUT_FILE = "presales_data_sample.csv"
+    INPUT_FILE = "phase1_selected_rows.csv"
     OUTPUT_FILE = "phase1_pragmatic_selected_rows.csv"
     REJECTED_FILE = "phase1_pragmatic_rejected_rows.csv"
 
