@@ -7,6 +7,10 @@ import os
 import re
 from datetime import datetime
 import logging
+import warnings
+
+# Suppress urllib3 warning about LibreSSL compatibility
+warnings.filterwarnings("ignore", category=UserWarning, message="urllib3 v2 only supports OpenSSL 1.1.1+")
 
 # Set up logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -98,15 +102,42 @@ def check_website_accessibility(url, timeout=10):
     except Exception as e:
         return False, None, f"Unexpected error: {str(e)}"
 
-def select_best_company_version_pragmatic(company_rows):
+def process_supplier_data_pragmatic(input_file, output_file, rejected_file=None):
     """
-    Select the best version from 5 rows of the same company using pragmatic criteria:
-    1. Must have a valid website URL
-    2. The website must be accessible
+    Main function with pragmatic filtering criteria focusing on website validation
+    Processes each row individually instead of in blocks of 5
     """
-    valid_versions = []
+    print("Starting Phase 1: PRAGMATIC Company Selection")
+    print("=" * 60)
+    print("Selection criteria:")
+    print("1. Company must have a valid website URL")
+    print("2. Website must be accessible and load properly")
+    print("(Processing each row individually, no grouping required)")
+    print("-" * 60)
 
-    for idx, row in company_rows.iterrows():
+    # Load the data
+    try:
+        df = pd.read_csv(input_file)
+        print(f"Loaded {len(df)} rows from input file")
+    except Exception as e:
+        print(f"❌ Error loading file: {e}")
+        return None
+
+    selected_companies = []
+    rejected_companies = []
+    total_companies = len(df)
+
+    print(f"\nProcessing {total_companies} companies with PRAGMATIC criteria")
+    print("This will take some time as we're checking live websites...")
+    print("-" * 60)
+
+    # Process each row individually
+    start_time = time.time()
+
+    for idx, row in df.iterrows():
+        company_name = row.get('company_name', f"Unnamed_{idx}")
+        print(f"Processing company {idx + 1}/{total_companies}: {company_name}")
+
         # Get website URL
         website_url = row.get('website_url', '')
 
@@ -123,104 +154,33 @@ def select_best_company_version_pragmatic(company_rows):
                 selected_row['selection_status'] = 'SELECTED'
                 selected_row['website_status'] = f'Accessible (Status: {status_code})'
                 selected_row['website_url_normalized'] = normalized_url
-                valid_versions.append(selected_row)
+                selected_companies.append(selected_row)
+                print(f"✅ SELECTED: {company_name} - Website accessible")
             else:
-                logger.debug(f"Website not accessible: {normalized_url} - {error_msg}")
-
-    # Return the first valid version (or None if none are valid)
-    if valid_versions:
-        return valid_versions[0]  # Return the first valid version
-    else:
-        return None
-
-def process_supplier_data_pragmatic(input_file, output_file, rejected_file=None):
-    """
-    Main function with pragmatic filtering criteria focusing on website validation
-    """
-    print("Starting Phase 1: PRAGMATIC Company Selection")
-    print("=" * 60)
-    print("Selection criteria:")
-    print("1. Company must have a valid website URL")
-    print("2. Website must be accessible and load properly")
-    print("(No filtering based on company names, keywords, or complex scoring)")
-    print("-" * 60)
-
-    # Load the data
-    try:
-        df = pd.read_csv(input_file)
-        print(f"Loaded {len(df)} rows from input file")
-    except Exception as e:
-        print(f"❌ Error loading file: {e}")
-        return None
-
-    # Verify structure
-    if (len(df) - 1) % 5 != 0:
-        print(f"⚠️  Warning: Row count ({len(df)}) not divisible by 5 (plus header)")
-        print(f"   Expected format: 1 header row + multiples of 5 company rows")
-
-    selected_companies = []
-    rejected_companies = []
-    total_companies = (len(df) - 1) // 5
-
-    print(f"\nProcessing {total_companies} companies with PRAGMATIC criteria")
-    print("This will take some time as we're checking live websites...")
-    print("-" * 60)
-
-    # Process companies in blocks of 5 rows
-    start_time = time.time()
-    companies_processed = 0
-
-    for i in range(1, len(df), 5):
-        if i + 4 >= len(df):
-            print(f"⚠️  Incomplete company block starting at row {i}, skipping")
-            continue
-
-        # Extract the 5 rows for this company
-        company_block = df.iloc[i:i+5]
-        company_name = company_block.iloc[0]['company_name'] if pd.notna(company_block.iloc[0]['company_name']) else f"Unnamed_{i}"
-
-        print(f"Processing company {companies_processed + 1}/{total_companies}: {company_name}")
-
-        # Select the best version with pragmatic criteria
-        result = select_best_company_version_pragmatic(company_block)
-
-        if result is not None:
-            selected_companies.append(result)
-            print(f"✅ SELECTED: {company_name} - Website accessible")
+                rejected_companies.append({
+                    'company_name': company_name,
+                    'website_url': website_url,
+                    'rejection_reason': f"Website not accessible: {error_msg}",
+                    'row_number': idx + 1  # 1-indexed for readability
+                })
+                print(f"❌ REJECTED: {company_name} - {error_msg}")
         else:
-            # No valid version found - check why
-            rejection_reason = "No valid website found or websites not accessible"
-
-            # Check if any rows had websites at all
-            had_websites = False
-            for idx, row in company_block.iterrows():
-                website_url = row.get('website_url', '')
-                if pd.notna(website_url) and str(website_url).strip() != "" and str(website_url).lower() not in ["not available", "n/a", "none"]:
-                    had_websites = True
-                    break
-
-            if had_websites:
-                rejection_reason = "Had websites but none were accessible"
-            else:
-                rejection_reason = "No website information available"
-
             rejected_companies.append({
                 'company_name': company_name,
-                'rejection_reason': rejection_reason,
-                'row_range': f"{i}-{i+4}"
+                'website_url': website_url,
+                'rejection_reason': "No valid website URL",
+                'row_number': idx + 1
             })
-            print(f"❌ REJECTED: {company_name} - {rejection_reason}")
-
-        companies_processed += 1
+            print(f"❌ REJECTED: {company_name} - No valid website URL")
 
         # Rate limiting - be respectful to servers
-        if companies_processed % 10 == 0:
+        if (idx + 1) % 10 == 0:
             elapsed_time = time.time() - start_time
-            avg_time_per_company = elapsed_time / companies_processed
-            remaining_companies = total_companies - companies_processed
+            avg_time_per_company = elapsed_time / (idx + 1)
+            remaining_companies = total_companies - (idx + 1)
             estimated_remaining_time = avg_time_per_company * remaining_companies
 
-            print(f"Progress: {companies_processed}/{total_companies} companies processed")
+            print(f"Progress: {idx + 1}/{total_companies} companies processed")
             print(f"Estimated remaining time: {estimated_remaining_time:.1f} seconds")
             print("-" * 60)
 
@@ -272,10 +232,15 @@ def process_supplier_data_pragmatic(input_file, output_file, rejected_file=None)
         if selected_companies:
             print(f"\nSummary of selected companies:")
             print(f"- Average processing time per company: {total_time/total_companies:.2f} seconds")
-            print(f"- Countries represented: {', '.join(result_df['main_country'].value_counts().head(5).index.tolist())}")
-            print(f"- Top industries (NAICS):")
-            for industry, count in result_df['naics_2022_primary_label'].value_counts().head(3).items():
-                print(f"  • {industry}: {count} companies")
+
+            if 'main_country' in result_df.columns:
+                top_countries = result_df['main_country'].value_counts().head(5).index.tolist()
+                print(f"- Countries represented: {', '.join(top_countries)}")
+
+            if 'naics_2022_primary_label' in result_df.columns:
+                print(f"- Top industries (NAICS):")
+                for industry, count in result_df['naics_2022_primary_label'].value_counts().head(3).items():
+                    print(f"  • {industry}: {count} companies")
 
         return result_df
     else:
